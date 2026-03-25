@@ -1,0 +1,106 @@
+'use server'
+
+// -----------------------------------------------------------------------------
+// Admin Server Actions
+// -----------------------------------------------------------------------------
+// Server actions for managing kit types and user roles.
+// These run on the server and can be called from client components.
+// Each action verifies the user is an admin before doing anything.
+// -----------------------------------------------------------------------------
+
+import { createClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
+import { requireAdmin } from '@/lib/auth'
+
+
+// =============================================================================
+// KIT TYPE ACTIONS
+// =============================================================================
+
+// Add a brand new kit type to the system
+export async function addKitType(
+  name: string,
+  description: string
+): Promise<{ error: string | null }> {
+  await requireAdmin()
+  const supabase = await createClient()
+
+  const { error } = await supabase.from('kit_types').insert({
+    name: name.trim(),
+    description: description.trim(),
+    is_active: true,
+  })
+
+  if (error) return { error: error.message }
+
+  // Refresh both the kits page and the dashboard (which also shows kit data)
+  revalidatePath('/kits')
+  revalidatePath('/dashboard')
+  return { error: null }
+}
+
+// Update an existing kit type's name and description
+export async function updateKitType(
+  id: string,
+  name: string,
+  description: string
+): Promise<{ error: string | null }> {
+  await requireAdmin()
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('kit_types')
+    .update({ name: name.trim(), description: description.trim() })
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/kits')
+  revalidatePath('/dashboard')
+  return { error: null }
+}
+
+// Deactivate or reactivate a kit type.
+// isActive = true → reactivate; isActive = false → deactivate
+export async function toggleKitTypeActive(
+  id: string,
+  isActive: boolean
+): Promise<{ error: string | null }> {
+  await requireAdmin()
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('kit_types')
+    .update({ is_active: isActive })
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/kits')
+  revalidatePath('/dashboard')
+  return { error: null }
+}
+
+
+// =============================================================================
+// USER MANAGEMENT ACTIONS
+// =============================================================================
+
+// Change a user's role between 'admin' and 'warehouse'
+export async function updateUserRole(
+  profileId: string,
+  role: 'admin' | 'warehouse'
+): Promise<{ error: string | null }> {
+  await requireAdmin()
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ role })
+    .eq('id', profileId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/users')
+  return { error: null }
+}

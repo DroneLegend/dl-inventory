@@ -1,101 +1,78 @@
-import Image from "next/image";
+// -----------------------------------------------------------------------------
+// Login Page (Root Route)
+// -----------------------------------------------------------------------------
+// This is the entry point of the app. It shows the login form.
+// If the user is already logged in, they get redirected to the right page
+// based on their role (admin → /dashboard, warehouse → /warehouse).
 
-export default function Home() {
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import LoginForm from '@/components/auth/login-form'
+
+export const metadata = {
+  title: 'Sign In — DL Inventory',
+}
+
+export default async function LoginPage() {
+  const supabase = await createClient()
+
+  // Check if there's already a logged-in user
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (user) {
+    // User is already logged in — look up their role and redirect
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (profile?.role === 'admin') {
+      redirect('/dashboard')
+    } else {
+      redirect('/warehouse')
+    }
+  }
+
+  // No logged-in user — show the login page
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+    // Full-screen navy background
+    <div className="min-h-screen bg-brand-navy flex items-center justify-center p-4">
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+      {/* Centered login card */}
+      <div className="w-full max-w-md">
+
+        {/* Drone Legends branding */}
+        <div className="text-center mb-8">
+          {/* Decorative accent bars above the logo */}
+          <div className="inline-flex flex-col items-center gap-2 mb-2">
+            <div className="w-12 h-1.5 rounded-full bg-brand-orange" />
+            <div className="w-8 h-1.5 rounded-full bg-brand-orange opacity-60" />
+          </div>
+          <h1 className="text-3xl font-bold text-white tracking-tight mt-3">
+            Drone Legends
+          </h1>
+          <p className="text-slate-400 text-sm mt-1 tracking-widest uppercase">
+            Inventory System
+          </p>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        {/* Login card */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 shadow-2xl backdrop-blur-sm">
+          <h2 className="text-white text-xl font-semibold mb-6">
+            Sign in to your account
+          </h2>
+
+          {/* LoginForm is a client component that handles the actual login logic */}
+          <LoginForm />
+        </div>
+
+        {/* Footer note */}
+        <p className="text-center text-slate-500 text-xs mt-6">
+          Access is restricted to authorized Drone Legends staff.
+        </p>
+
+      </div>
     </div>
-  );
+  )
 }
