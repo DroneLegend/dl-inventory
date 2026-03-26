@@ -24,7 +24,7 @@ export default async function UsersPage() {
   // Fetch all user profiles (including is_active status)
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, email, full_name, role, is_active, created_at')
+    .select('id, email, full_name, role, is_active, archived, created_at')
     .order('created_at', { ascending: true })
 
   return (

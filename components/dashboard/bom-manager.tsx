@@ -58,13 +58,19 @@ type Props = {
   kitTypes: KitType[]
   bomItems: BomItem[]
   allItems: Item[] // All active items available to add to a BOM
+  initialKitId?: string // Optional: pre-select a kit (e.g. after duplication)
 }
 
 // ---- Main component ----------------------------------------------------------
 
-export default function BomManager({ kitTypes, bomItems, allItems }: Props) {
-  // The kit type the user is currently managing
-  const [selectedKitId, setSelectedKitId] = useState<string>(kitTypes[0]?.id ?? '')
+export default function BomManager({ kitTypes, bomItems, allItems, initialKitId }: Props) {
+  // The kit type the user is currently managing.
+  // If initialKitId is provided and valid, use it; otherwise default to the first kit.
+  const [selectedKitId, setSelectedKitId] = useState<string>(
+    initialKitId && kitTypes.some(k => k.id === initialKitId)
+      ? initialKitId
+      : kitTypes[0]?.id ?? ''
+  )
 
   // Which BOM item row is currently in "full edit" mode (null = none)
   const [editingBomItemId, setEditingBomItemId] = useState<string | null>(null)

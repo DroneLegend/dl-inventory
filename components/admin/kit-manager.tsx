@@ -142,8 +142,8 @@ export default function KitManager({ kitTypes }: Props) {
         return
       }
 
-      // Redirect to the Dashboard's BOM Manager tab so they can edit quantities
-      window.location.href = '/dashboard?tab=bom'
+      // Redirect to the Dashboard's BOM Manager tab with the new kit pre-selected
+      window.location.href = `/dashboard?tab=bom&kitId=${data.newKitId}`
     } catch {
       setError('Network error. Please try again.')
     }

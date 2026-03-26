@@ -10,9 +10,9 @@
 // -----------------------------------------------------------------------------
 
 import { useState, useTransition } from 'react'
-import { updateUserRole } from '@/app/(protected)/admin/actions'
+import { updateUserRole, toggleUserArchived } from '@/app/(protected)/admin/actions'
 import { cn } from '@/lib/utils'
-import { UserPlus, CheckCircle, AlertCircle, X } from 'lucide-react'
+import { UserPlus, CheckCircle, AlertCircle, X, Archive, RotateCcw } from 'lucide-react'
 
 // ---- Type definitions --------------------------------------------------------
 
@@ -22,6 +22,7 @@ type Profile = {
   full_name: string | null
   role: 'admin' | 'warehouse'
   is_active: boolean
+  archived: boolean
   created_at: string
 }
 
@@ -71,6 +72,9 @@ export default function UserManager({ profiles, currentUserId }: Props) {
 
   // Controls whether the "Add User" modal is open
   const [showAddUser, setShowAddUser] = useState(false)
+
+  // Whether to show archived users in the list
+  const [showArchived, setShowArchived] = useState(false)
 
   // Add User form fields
   const [newEmail, setNewEmail] = useState('')
@@ -177,13 +181,41 @@ export default function UserManager({ profiles, currentUserId }: Props) {
     }
   }
 
+  // Archive or restore a user
+  function handleToggleArchived(profile: Profile) {
+    const restoring = profile.archived
+    if (!restoring) {
+      if (!confirm(`Archive "${profile.full_name ?? profile.email}"?\n\nThey will be hidden from the default user list.`)) return
+    }
+
+    startTransition(async () => {
+      const result = await toggleUserArchived(profile.id, !profile.archived)
+      if (result.error) {
+        showToast(result.error, 'error')
+      } else {
+        showToast(
+          `${profile.full_name ?? profile.email} has been ${restoring ? 'restored' : 'archived'}.`,
+          'success'
+        )
+      }
+    })
+  }
+
+  // Filter out archived users unless "Show Archived" is on
+  const filtered = profiles.filter(p => showArchived || !p.archived)
+
   // Sort users: admins first, then alphabetically by name/email
-  const sorted = [...profiles].sort((a, b) => {
+  const sorted = [...filtered].sort((a, b) => {
+    // Archived users go to the bottom
+    if (a.archived !== b.archived) return a.archived ? 1 : -1
     if (a.role !== b.role) return a.role === 'admin' ? -1 : 1
     const nameA = a.full_name ?? a.email
     const nameB = b.full_name ?? b.email
     return nameA.localeCompare(nameB)
   })
+
+  // Count how many archived users exist (for the toggle label)
+  const archivedCount = profiles.filter(p => p.archived).length
 
   return (
     <div className="space-y-4">
@@ -193,8 +225,31 @@ export default function UserManager({ profiles, currentUserId }: Props) {
         <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />
       )}
 
-      {/* Add User button */}
-      <div className="flex justify-end">
+      {/* Toolbar: Show Archived toggle + Add User button */}
+      <div className="flex items-center justify-between">
+        {/* Show Archived toggle */}
+        {archivedCount > 0 && (
+          <button
+            onClick={() => setShowArchived(!showArchived)}
+            className="inline-flex items-center gap-2 cursor-pointer"
+          >
+            <div className={cn(
+              'relative w-9 h-5 rounded-full transition-colors',
+              showArchived ? 'bg-brand-navy' : 'bg-slate-300'
+            )}>
+              <div className={cn(
+                'absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform',
+                showArchived ? 'translate-x-4' : 'translate-x-0.5'
+              )} />
+            </div>
+            <span className="text-sm text-slate-600">
+              Show Archived ({archivedCount})
+            </span>
+          </button>
+        )}
+        {archivedCount === 0 && <div />}
+
+        {/* Add User button */}
         <button
           onClick={() => setShowAddUser(true)}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-navy text-white
@@ -324,11 +379,12 @@ export default function UserManager({ profiles, currentUserId }: Props) {
                 // Admins can't change their own role or deactivate themselves
                 const isSelf = profile.id === currentUserId
                 const isActive = profile.is_active !== false // default to true if null
+                const isArchived = profile.archived === true
 
                 return (
                   <tr key={profile.id} className={cn(
                     'hover:bg-slate-50 transition-colors',
-                    !isActive && 'opacity-60'
+                    (isArchived || !isActive) && 'opacity-60'
                   )}>
 
                     {/* Full name */}
@@ -340,6 +396,12 @@ export default function UserManager({ profiles, currentUserId }: Props) {
                       {isSelf && (
                         <span className="ml-2 text-xs bg-brand-orange/15 text-brand-orange px-1.5 py-0.5 rounded font-medium">
                           You
+                        </span>
+                      )}
+                      {/* "Archived" badge */}
+                      {isArchived && (
+                        <span className="ml-2 text-xs bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded font-medium">
+                          Archived
                         </span>
                       )}
                     </td>
@@ -392,24 +454,47 @@ export default function UserManager({ profiles, currentUserId }: Props) {
                       )}
                     </td>
 
-                    {/* Role toggle button */}
+                    {/* Actions: role toggle + archive/restore */}
                     <td className="px-4 py-3 text-right">
                       {isSelf ? (
-                        // Can't change your own role
                         <span className="text-xs text-slate-300">&mdash;</span>
                       ) : (
-                        <button
-                          onClick={() => handleToggleRole(profile)}
-                          disabled={isPending}
-                          className={cn(
-                            'text-xs font-medium px-3 py-1 rounded-lg border transition-colors disabled:opacity-50',
-                            profile.role === 'admin'
-                              ? 'border-slate-200 text-slate-600 hover:border-red-300 hover:text-red-600 hover:bg-red-50'
-                              : 'border-slate-200 text-slate-600 hover:border-brand-navy hover:text-brand-navy hover:bg-brand-navy/5'
+                        <div className="flex items-center justify-end gap-2">
+                          {/* Role toggle button */}
+                          <button
+                            onClick={() => handleToggleRole(profile)}
+                            disabled={isPending}
+                            className={cn(
+                              'text-xs font-medium px-3 py-1 rounded-lg border transition-colors disabled:opacity-50',
+                              profile.role === 'admin'
+                                ? 'border-slate-200 text-slate-600 hover:border-red-300 hover:text-red-600 hover:bg-red-50'
+                                : 'border-slate-200 text-slate-600 hover:border-brand-navy hover:text-brand-navy hover:bg-brand-navy/5'
+                            )}
+                          >
+                            {profile.role === 'admin' ? 'Make Warehouse' : 'Make Admin'}
+                          </button>
+
+                          {/* Archive or Restore button */}
+                          {isArchived ? (
+                            <button
+                              onClick={() => handleToggleArchived(profile)}
+                              disabled={isPending}
+                              className="text-slate-400 hover:text-green-600 transition-colors disabled:opacity-50"
+                              title="Restore user"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleToggleArchived(profile)}
+                              disabled={isPending}
+                              className="text-slate-400 hover:text-red-500 transition-colors disabled:opacity-50"
+                              title="Archive user"
+                            >
+                              <Archive className="h-4 w-4" />
+                            </button>
                           )}
-                        >
-                          {profile.role === 'admin' ? 'Make Warehouse' : 'Make Admin'}
-                        </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -427,6 +512,8 @@ export default function UserManager({ profiles, currentUserId }: Props) {
         <strong>Warehouse</strong> — can only view stock and log receives/ships.
         &nbsp;&nbsp;
         <strong>Inactive</strong> — user cannot log in but their history is preserved.
+        &nbsp;&nbsp;
+        <strong>Archived</strong> — hidden from the default list; use the toggle above to view and restore.
       </p>
 
     </div>

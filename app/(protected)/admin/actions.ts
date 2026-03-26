@@ -116,6 +116,26 @@ export async function deleteKitType(
 // USER MANAGEMENT ACTIONS
 // =============================================================================
 
+// Archive or restore a user. Archived users are hidden from the default list
+// but can be shown with the "Show Archived" toggle.
+export async function toggleUserArchived(
+  profileId: string,
+  archived: boolean
+): Promise<{ error: string | null }> {
+  await requireAdmin()
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ archived })
+    .eq('id', profileId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/users')
+  return { error: null }
+}
+
 // Change a user's role between 'admin' and 'warehouse'
 export async function updateUserRole(
   profileId: string,

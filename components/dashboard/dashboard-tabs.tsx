@@ -139,6 +139,7 @@ export default function DashboardTabs({
   // Support deep-linking to a tab via ?tab=bom (or any tab id)
   const searchParams = useSearchParams()
   const tabParam = searchParams.get('tab')
+  const kitIdParam = searchParams.get('kitId')
 
   // Which tab is currently active (defaults to the Kit Calculator, or URL param)
   const [activeTabId, setActiveTabId] = useState<string>(
@@ -211,6 +212,7 @@ export default function DashboardTabs({
           kitTypes={kitTypes}
           bomItems={bomItems}
           allItems={allItems.filter((i) => i.is_active)}
+          initialKitId={kitIdParam ?? undefined}
         />
       )}
 
