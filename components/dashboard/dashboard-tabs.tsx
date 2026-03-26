@@ -8,7 +8,8 @@
 // the server) is passed in as props and distributed to each tab component.
 // -----------------------------------------------------------------------------
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import {
   Calculator,    // Kit Fulfillment Calculator
@@ -135,8 +136,21 @@ export default function DashboardTabs({
   allItems,
   alertSettings,
 }: Props) {
-  // Which tab is currently active (defaults to the Kit Calculator)
-  const [activeTabId, setActiveTabId] = useState<string>('calculator')
+  // Support deep-linking to a tab via ?tab=bom (or any tab id)
+  const searchParams = useSearchParams()
+  const tabParam = searchParams.get('tab')
+
+  // Which tab is currently active (defaults to the Kit Calculator, or URL param)
+  const [activeTabId, setActiveTabId] = useState<string>(
+    TABS.some(t => t.id === tabParam) ? tabParam! : 'calculator'
+  )
+
+  // Update active tab if URL search param changes
+  useEffect(() => {
+    if (tabParam && TABS.some(t => t.id === tabParam)) {
+      setActiveTabId(tabParam)
+    }
+  }, [tabParam])
 
   const activeTab = TABS.find((t) => t.id === activeTabId) ?? TABS[0]
 

@@ -82,6 +82,36 @@ export async function toggleKitTypeActive(
 }
 
 
+// Delete a kit type and all its associated BOM items.
+// Deletes BOM items first to respect foreign key constraints.
+export async function deleteKitType(
+  id: string
+): Promise<{ error: string | null }> {
+  await requireAdmin()
+  const supabase = await createClient()
+
+  // 1. Delete all BOM items that reference this kit type
+  const { error: bomError } = await supabase
+    .from('bom_items')
+    .delete()
+    .eq('kit_type_id', id)
+
+  if (bomError) return { error: bomError.message }
+
+  // 2. Delete the kit type itself
+  const { error: kitError } = await supabase
+    .from('kit_types')
+    .delete()
+    .eq('id', id)
+
+  if (kitError) return { error: kitError.message }
+
+  revalidatePath('/kits')
+  revalidatePath('/dashboard')
+  return { error: null }
+}
+
+
 // =============================================================================
 // USER MANAGEMENT ACTIONS
 // =============================================================================

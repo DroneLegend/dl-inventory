@@ -15,8 +15,9 @@ import { useState, useTransition } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Pencil, Plus, X, Check } from 'lucide-react'
-import { addKitType, updateKitType, toggleKitTypeActive } from '@/app/(protected)/admin/actions'
+import { Copy, Pencil, Plus, Trash2, X, Check } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { addKitType, updateKitType, toggleKitTypeActive, deleteKitType } from '@/app/(protected)/admin/actions'
 import { cn } from '@/lib/utils'
 
 // ---- Type definitions --------------------------------------------------------
@@ -52,6 +53,9 @@ export default function KitManager({ kitTypes }: Props) {
 
   // isPending = true while a server action is in progress
   const [isPending, startTransition] = useTransition()
+
+  // Router for redirecting after kit duplication
+  const router = useRouter()
 
   // ---- Form helpers -----------------------------------------------------------
 
@@ -119,6 +123,41 @@ export default function KitManager({ kitTypes }: Props) {
 
     startTransition(async () => {
       const result = await toggleKitTypeActive(kit.id, !kit.is_active)
+      if (result.error) setError(result.error)
+    })
+  }
+
+  // Duplicate a kit type: prompt for new name, call API, redirect to BOM Manager
+  async function handleDuplicate(kit: KitType) {
+    const newName = prompt(`Enter a name for the duplicated kit:`, `${kit.name} (Copy)`)
+    if (!newName || !newName.trim()) return
+
+    try {
+      const res = await fetch('/api/kits/duplicate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceKitId: kit.id, newName: newName.trim() }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.error || 'Failed to duplicate kit.')
+        return
+      }
+
+      // Redirect to the Dashboard's BOM Manager tab so they can edit quantities
+      window.location.href = '/dashboard?tab=bom'
+    } catch {
+      setError('Network error. Please try again.')
+    }
+  }
+
+  // Delete a kit type and all its BOM items after confirmation
+  function handleDelete(kit: KitType) {
+    if (!confirm(`Are you sure you want to delete "${kit.name}" and its entire BOM?`)) return
+
+    startTransition(async () => {
+      const result = await deleteKitType(kit.id)
       if (result.error) setError(result.error)
     })
   }
@@ -336,6 +375,16 @@ export default function KitManager({ kitTypes }: Props) {
                           <Pencil className="h-4 w-4" />
                         </button>
 
+                        {/* Duplicate button */}
+                        <button
+                          onClick={() => handleDuplicate(kit)}
+                          className="text-slate-400 hover:text-brand-navy transition-colors"
+                          title="Duplicate kit type"
+                          disabled={isPending}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </button>
+
                         {/* Deactivate / Reactivate button */}
                         <button
                           onClick={() => handleToggleActive(kit)}
@@ -348,6 +397,16 @@ export default function KitManager({ kitTypes }: Props) {
                           disabled={isPending}
                         >
                           {kit.is_active ? 'Deactivate' : 'Reactivate'}
+                        </button>
+
+                        {/* Delete button */}
+                        <button
+                          onClick={() => handleDelete(kit)}
+                          className="text-slate-400 hover:text-red-600 transition-colors"
+                          title="Delete kit type and its BOM"
+                          disabled={isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     </td>
