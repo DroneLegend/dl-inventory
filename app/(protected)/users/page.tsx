@@ -21,10 +21,10 @@ export default async function UsersPage() {
   // Create a Supabase client for server-side data fetching
   const supabase = await createClient()
 
-  // Fetch all user profiles
+  // Fetch all user profiles (including is_active status)
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, email, full_name, role, created_at')
+    .select('id, email, full_name, role, is_active, created_at')
     .order('created_at', { ascending: true })
 
   return (
