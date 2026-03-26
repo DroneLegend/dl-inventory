@@ -198,6 +198,57 @@ export async function upsertAlertSettings(
 
 
 // =============================================================================
+// ADJUST STOCK ACTION
+// =============================================================================
+
+// Manually adjust an item's stock level. Admin-only.
+// Supports two modes:
+//   - "set": Set stock to an exact count (we calculate the delta)
+//   - "delta": Add or remove a specific quantity directly
+// Creates an 'adjust' transaction to preserve the full audit trail.
+export async function adjustStock(data: {
+  itemId: string
+  adjustmentType: 'set' | 'delta'
+  value: number
+  currentQuantity: number
+  reason: string
+}): Promise<{ error: string | null }> {
+  const profile = await requireAdmin()
+  const supabase = await createClient()
+
+  // Calculate the transaction quantity based on adjustment type
+  let quantity: number
+  if (data.adjustmentType === 'set') {
+    // "Set to exact count" — delta is new value minus current stock
+    quantity = data.value - data.currentQuantity
+  } else {
+    // "Add/Remove quantity" — use the entered value directly
+    quantity = data.value
+  }
+
+  // Don't create a no-op transaction
+  if (quantity === 0) {
+    return { error: 'No change — the adjusted quantity equals the current stock.' }
+  }
+
+  const { error } = await supabase
+    .from('inventory_transactions')
+    .insert({
+      item_id: data.itemId,
+      transaction_type: 'adjust',
+      quantity,
+      notes: data.reason.trim(),
+      created_by: profile.id,
+    })
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/dashboard')
+  return { error: null }
+}
+
+
+// =============================================================================
 // INVENTORY OVERVIEW ACTION
 // =============================================================================
 

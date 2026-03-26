@@ -9,8 +9,8 @@
 // -----------------------------------------------------------------------------
 
 import { useState, useTransition } from 'react'
-import { ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
-import { getItemTransactions } from '@/app/(protected)/dashboard/actions'
+import { ChevronDown, ChevronRight, AlertTriangle, Pencil, X } from 'lucide-react'
+import { getItemTransactions, adjustStock } from '@/app/(protected)/dashboard/actions'
 import { cn } from '@/lib/utils'
 
 // ---- Type definitions --------------------------------------------------------
@@ -88,6 +88,70 @@ export default function InventoryOverview({ inventory }: Props) {
 
   // Filter: 'all', 'low', 'active', 'inactive'
   const [filter, setFilter] = useState<'all' | 'low' | 'active' | 'inactive'>('active')
+
+  // Adjust stock modal state
+  const [adjustItem, setAdjustItem] = useState<InventoryItem | null>(null)
+  const [adjustType, setAdjustType] = useState<'set' | 'delta'>('set')
+  const [adjustValue, setAdjustValue] = useState('')
+  const [adjustReason, setAdjustReason] = useState('')
+  const [adjustError, setAdjustError] = useState<string | null>(null)
+  const [isAdjusting, startAdjustTransition] = useTransition()
+
+  // Open the adjust modal for a given item
+  function openAdjustModal(item: InventoryItem, e: React.MouseEvent) {
+    e.stopPropagation() // Don't toggle the row expansion
+    setAdjustItem(item)
+    setAdjustType('set')
+    setAdjustValue('')
+    setAdjustReason('')
+    setAdjustError(null)
+  }
+
+  // Close the adjust modal and reset form
+  function closeAdjustModal() {
+    setAdjustItem(null)
+    setAdjustValue('')
+    setAdjustReason('')
+    setAdjustError(null)
+  }
+
+  // Submit the stock adjustment
+  function handleAdjustSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!adjustItem) return
+
+    const numValue = Number(adjustValue)
+    if (isNaN(numValue)) {
+      setAdjustError('Please enter a valid number.')
+      return
+    }
+    if (!adjustReason.trim()) {
+      setAdjustError('A reason is required for audit purposes.')
+      return
+    }
+
+    startAdjustTransition(async () => {
+      const result = await adjustStock({
+        itemId: adjustItem.item_id,
+        adjustmentType: adjustType,
+        value: numValue,
+        currentQuantity: adjustItem.quantity_on_hand,
+        reason: adjustReason.trim(),
+      })
+
+      if (result.error) {
+        setAdjustError(result.error)
+      } else {
+        // Clear the transaction cache for this item so it reloads fresh
+        setTransactionCache((prev) => {
+          const next = { ...prev }
+          delete next[adjustItem.item_id]
+          return next
+        })
+        closeAdjustModal()
+      }
+    })
+  }
 
   // Apply filters and search
   const displayedItems = inventory
@@ -198,6 +262,7 @@ export default function InventoryOverview({ inventory }: Props) {
                 <th className="px-4 py-3 text-right font-semibold text-slate-500 text-xs uppercase tracking-wide">On Hand</th>
                 <th className="px-4 py-3 text-right font-semibold text-slate-500 text-xs uppercase tracking-wide">Reorder Point</th>
                 <th className="px-4 py-3 text-center font-semibold text-slate-500 text-xs uppercase tracking-wide">Stock Status</th>
+                <th className="w-16" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -274,12 +339,26 @@ export default function InventoryOverview({ inventory }: Props) {
                           </span>
                         )}
                       </td>
+
+                      {/* Adjust stock button (admin-only — this whole page requires admin) */}
+                      <td className="px-2 py-3 text-center">
+                        <button
+                          onClick={(e) => openAdjustModal(item, e)}
+                          title="Adjust stock"
+                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-500
+                                     rounded-md border border-slate-200 hover:bg-slate-50 hover:text-brand-navy
+                                     transition-colors"
+                        >
+                          <Pencil className="h-3 w-3" />
+                          Adjust
+                        </button>
+                      </td>
                     </tr>
 
                     {/* Expanded transaction history row */}
                     {isExpanded && (
                       <tr key={`${item.item_id}-history`}>
-                        <td colSpan={6} className="px-6 pb-4 pt-2 bg-brand-navy/5 border-b border-slate-200">
+                        <td colSpan={7} className="px-6 pb-4 pt-2 bg-brand-navy/5 border-b border-slate-200">
                           <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
 
                             <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100">
@@ -356,6 +435,119 @@ export default function InventoryOverview({ inventory }: Props) {
           </table>
         )}
       </div>
+
+      {/* ---- Adjust Stock Modal ---- */}
+      {adjustItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/40" onClick={closeAdjustModal} />
+
+          {/* Modal panel */}
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6 space-y-5">
+
+            {/* Header */}
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-800">Adjust Stock</h3>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  {adjustItem.sku} — {adjustItem.name}
+                </p>
+              </div>
+              <button onClick={closeAdjustModal} className="text-slate-400 hover:text-slate-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Current quantity (read-only reference) */}
+            <div className="bg-slate-50 rounded-lg px-4 py-3">
+              <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Current On Hand</span>
+              <p className="text-2xl font-bold text-slate-800 mt-0.5">
+                {adjustItem.quantity_on_hand}
+                <span className="text-sm font-normal text-slate-400 ml-1">{adjustItem.unit_of_measure}</span>
+              </p>
+            </div>
+
+            <form onSubmit={handleAdjustSubmit} className="space-y-4">
+
+              {/* Adjustment type dropdown */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Adjustment Type</label>
+                <select
+                  value={adjustType}
+                  onChange={(e) => {
+                    setAdjustType(e.target.value as 'set' | 'delta')
+                    setAdjustValue('')
+                    setAdjustError(null)
+                  }}
+                  className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm
+                             focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
+                >
+                  <option value="set">Set to exact count</option>
+                  <option value="delta">Add/Remove quantity</option>
+                </select>
+              </div>
+
+              {/* Number input */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {adjustType === 'set' ? 'New Stock Count' : 'Quantity (positive to add, negative to remove)'}
+                </label>
+                <input
+                  type="number"
+                  value={adjustValue}
+                  onChange={(e) => { setAdjustValue(e.target.value); setAdjustError(null) }}
+                  placeholder={adjustType === 'set' ? 'e.g. 55' : 'e.g. 10 or -5'}
+                  required
+                  className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm
+                             focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
+                />
+                {/* Preview the resulting change for "set" mode */}
+                {adjustType === 'set' && adjustValue !== '' && !isNaN(Number(adjustValue)) && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    This will create a transaction of{' '}
+                    <span className={cn(
+                      'font-semibold',
+                      Number(adjustValue) - adjustItem.quantity_on_hand > 0 ? 'text-green-600' : 'text-red-500'
+                    )}>
+                      {Number(adjustValue) - adjustItem.quantity_on_hand > 0 ? '+' : ''}
+                      {Number(adjustValue) - adjustItem.quantity_on_hand}
+                    </span>
+                  </p>
+                )}
+              </div>
+
+              {/* Reason (required) */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Reason <span className="text-red-400">*</span></label>
+                <input
+                  type="text"
+                  value={adjustReason}
+                  onChange={(e) => { setAdjustReason(e.target.value); setAdjustError(null) }}
+                  placeholder="e.g. Physical count reconciliation"
+                  required
+                  className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm
+                             focus:outline-none focus:ring-2 focus:ring-brand-orange/40"
+                />
+              </div>
+
+              {/* Error message */}
+              {adjustError && (
+                <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{adjustError}</p>
+              )}
+
+              {/* Submit button */}
+              <button
+                type="submit"
+                disabled={isAdjusting}
+                className="w-full h-10 bg-brand-navy text-white text-sm font-semibold rounded-lg
+                           hover:bg-brand-navy/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isAdjusting ? 'Saving…' : 'Submit Adjustment'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   )
