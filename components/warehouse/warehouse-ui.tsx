@@ -1,17 +1,15 @@
 'use client'
 
 // -----------------------------------------------------------------------------
-// Warehouse UI — Main Client Component
+// Warehouse UI — Main Client Component ("Digital Worksheet")
 // -----------------------------------------------------------------------------
-// Manages the tab navigation and renders the correct form or view.
-// This is a client component because the tab state needs to update instantly
-// without a full page reload.
-//
-// The server page fetches all the data and passes it in as props.
+// Manages the segmented control tabs, language toggle, and help icon.
+// Uses Drone Legends brand colors (navy + orange) for the segmented control.
 // -----------------------------------------------------------------------------
 
 import { useState } from 'react'
-import { cn } from '@/lib/utils'
+import { Globe } from 'lucide-react'
+import WarehouseHelp from './warehouse-help'
 import ReceiveForm from './receive-form'
 import ShipKitsForm from './ship-kits-form'
 import ShipItemsForm from './ship-items-form'
@@ -60,89 +58,92 @@ type Props = {
   inventory: InventoryItem[]
 }
 
+export type Language = 'en' | 'es'
+
 // ---- Tab definitions --------------------------------------------------------
 
 type TabId = 'receive' | 'ship-kits' | 'ship-items' | 'stock'
 
 type Tab = {
   id: TabId
-  emoji: string   // large emoji icon — easy for non-tech users to recognise quickly
-  label: string
-  description: string
+  emoji: string
+  labels: { en: string; es: string }
 }
 
 const TABS: Tab[] = [
-  {
-    id: 'receive',
-    emoji: '📦',
-    label: 'Receive',
-    description: 'Stock arriving',
-  },
-  {
-    id: 'ship-kits',
-    emoji: '🚀',
-    label: 'Ship Kits',
-    description: 'Full kit orders',
-  },
-  {
-    id: 'ship-items',
-    emoji: '📤',
-    label: 'Ship Items',
-    description: 'Individual items',
-  },
-  {
-    id: 'stock',
-    emoji: '📋',
-    label: 'Stock Levels',
-    description: 'View current stock',
-  },
+  { id: 'receive',    emoji: '📦', labels: { en: 'Receive',    es: 'Recibir' } },
+  { id: 'ship-kits',  emoji: '🚀', labels: { en: 'Ship Kits',  es: 'Enviar Kits' } },
+  { id: 'ship-items', emoji: '📤', labels: { en: 'Ship Items', es: 'Enviar Objetos' } },
+  { id: 'stock',      emoji: '📋', labels: { en: 'Stock',      es: 'Inventario' } },
 ]
 
 // ---- Main component ----------------------------------------------------------
 
 export default function WarehouseUI({ items, kitTypes, bomItems, inventory }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>('receive')
+  const [lang, setLang] = useState<Language>('en')
 
-  // Build a simpler inventory array for forms that only need item_id + quantity
   const inventoryForForms = inventory.map((i) => ({
     item_id: i.item_id,
     quantity_on_hand: i.quantity_on_hand,
   }))
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      {/* ---- Tab buttons ----------------------------------------------------- */}
-      {/* Large, easy-to-tap buttons designed for warehouse workers */}
-      <div className="grid grid-cols-4 gap-3">
-        {TABS.map((tab) => {
+    <div style={{ maxWidth: 720 }}>
+
+      {/* ---- Top bar: Language toggle + Help --------------------------------- */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <button
+          onClick={() => setLang((p) => (p === 'en' ? 'es' : 'en'))}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            padding: '8px 16px', borderRadius: 999,
+            border: '2px solid #cbd5e1', background: '#fff',
+            fontSize: 14, fontWeight: 600, color: '#334155', cursor: 'pointer',
+          }}
+        >
+          <Globe style={{ width: 16, height: 16 }} />
+          {lang === 'en' ? 'Español' : 'English'}
+        </button>
+
+        <WarehouseHelp lang={lang} />
+      </div>
+
+      {/* ---- Segmented Control Tabs ------------------------------------------ */}
+      {/* A single rounded bar with four segments, Drone Legends branding */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          borderRadius: 16,
+          overflow: 'hidden',
+          border: '2px solid #1B2A4A',
+          marginBottom: 20,
+        }}
+      >
+        {TABS.map((tab, i) => {
           const isActive = tab.id === activeTab
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                // Base styles: big rounded card-like button
-                'flex flex-col items-center gap-1.5 p-4 rounded-2xl border-2',
-                'transition-all duration-150 select-none',
-                isActive
-                  // Active: navy border + light navy background
-                  ? 'border-brand-navy bg-brand-navy/8 shadow-sm'
-                  // Inactive: light grey, hover to navy border
-                  : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
-              )}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                justifyContent: 'center', gap: 2,
+                padding: '14px 4px',
+                minHeight: 72,
+                background: isActive ? '#1B2A4A' : '#fff',
+                color: isActive ? '#fff' : '#1B2A4A',
+                border: 'none',
+                borderLeft: i > 0 ? '1px solid #1B2A4A' : 'none',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                transition: 'background 0.15s, color 0.15s',
+              }}
             >
-              {/* Big emoji icon */}
-              <span className="text-2xl leading-none">{tab.emoji}</span>
-              {/* Label */}
-              <span className={cn(
-                'text-sm font-bold leading-tight',
-                isActive ? 'text-brand-navy' : 'text-slate-600'
-              )}>
-                {tab.label}
-              </span>
-              {/* Description */}
-              <span className="text-xs text-slate-400 leading-tight text-center">
-                {tab.description}
+              <span style={{ fontSize: 22, lineHeight: 1 }}>{tab.emoji}</span>
+              <span style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.2 }}>
+                {tab.labels[lang]}
               </span>
             </button>
           )
@@ -151,7 +152,7 @@ export default function WarehouseUI({ items, kitTypes, bomItems, inventory }: Pr
 
       {/* ---- Tab content ----------------------------------------------------- */}
       {activeTab === 'receive' && (
-        <ReceiveForm items={items} />
+        <ReceiveForm items={items} lang={lang} />
       )}
 
       {activeTab === 'ship-kits' && (
@@ -159,6 +160,7 @@ export default function WarehouseUI({ items, kitTypes, bomItems, inventory }: Pr
           kitTypes={kitTypes}
           bomItems={bomItems}
           inventory={inventoryForForms}
+          lang={lang}
         />
       )}
 
@@ -166,6 +168,7 @@ export default function WarehouseUI({ items, kitTypes, bomItems, inventory }: Pr
         <ShipItemsForm
           items={items}
           inventory={inventoryForForms}
+          lang={lang}
         />
       )}
 

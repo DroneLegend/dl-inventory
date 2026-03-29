@@ -61,6 +61,46 @@ export async function receiveInventory(data: {
 
 
 // =============================================================================
+// BATCH RECEIVE INVENTORY
+// =============================================================================
+// Records multiple physical items arriving at once — one transaction per item.
+// Used by the "Digital Worksheet" batch receive mode where staff enter
+// quantities for many items at once and hit one big save button.
+
+export async function batchReceiveInventory(data: {
+  entries: { itemId: string; quantity: number }[]
+  notes: string
+}): Promise<{ error: string | null }> {
+  const profile = await requireAuth()
+  const supabase = await createClient()
+
+  // Build one transaction per item that has a quantity > 0
+  const transactions = data.entries
+    .filter((e) => e.quantity > 0)
+    .map((e) => ({
+      item_id: e.itemId,
+      transaction_type: 'receive' as const,
+      quantity: e.quantity,
+      notes: data.notes.trim() || null,
+      created_by: profile.id,
+    }))
+
+  if (transactions.length === 0) {
+    return { error: 'No items have a quantity entered.' }
+  }
+
+  const { error } = await supabase
+    .from('inventory_transactions')
+    .insert(transactions)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/warehouse')
+  return { error: null }
+}
+
+
+// =============================================================================
 // UNDO A TRANSACTION
 // =============================================================================
 // Deletes a specific transaction — used by the 30-second undo button.
@@ -154,6 +194,71 @@ export async function shipKits(data: {
   // 4. Check for threshold crossings (fire-and-forget — don't fail the action if alerts fail)
   fireThresholdCheck(itemIds, prevQtyMap).catch((err) => {
     console.error('[Alerts] Threshold check failed after shipKits:', err)
+  })
+
+  return { error: null }
+}
+
+
+// =============================================================================
+// SHIP KIT (PARTIAL) — accepts custom quantities per item
+// =============================================================================
+// Like shipKits, but each BOM item can have a different quantity (for partial
+// shipments when staff don't have enough of every item).
+
+export async function shipKitPartial(data: {
+  kitTypeId: string
+  kitName: string
+  numKits: number
+  items: { itemId: string; quantity: number }[]
+  notes: string
+}): Promise<{ error: string | null }> {
+  const profile = await requireAuth()
+  const supabase = await createClient()
+
+  // Filter to only items with quantity > 0
+  const entries = data.items.filter((e) => e.quantity > 0)
+  if (entries.length === 0) {
+    return { error: 'No items have a quantity to ship.' }
+  }
+
+  // Snapshot current stock BEFORE the transaction
+  const itemIds = entries.map((e) => e.itemId)
+  const { data: preInventory } = await supabase
+    .from('current_inventory')
+    .select('item_id, quantity_on_hand')
+    .in('item_id', itemIds)
+
+  const prevQtyMap = new Map<string, number>(
+    (preInventory ?? []).map((r) => [r.item_id, r.quantity_on_hand])
+  )
+
+  const fullNotes = [
+    `Kit shipment: ${data.numKits}× ${data.kitName}`,
+    data.notes.trim() || null,
+  ]
+    .filter(Boolean)
+    .join(' | ')
+
+  // Build transactions with the custom quantities from the pick-list
+  const transactions = entries.map((e) => ({
+    item_id: e.itemId,
+    transaction_type: 'consume' as const,
+    quantity: -e.quantity,
+    notes: fullNotes,
+    created_by: profile.id,
+  }))
+
+  const { error: insertError } = await supabase
+    .from('inventory_transactions')
+    .insert(transactions)
+
+  if (insertError) return { error: insertError.message }
+
+  revalidatePath('/warehouse')
+
+  fireThresholdCheck(itemIds, prevQtyMap).catch((err) => {
+    console.error('[Alerts] Threshold check failed after shipKitPartial:', err)
   })
 
   return { error: null }
