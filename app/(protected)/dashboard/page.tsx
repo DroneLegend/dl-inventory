@@ -22,7 +22,7 @@ export const metadata = {
 
 export default async function DashboardPage() {
   // Verify the user is an admin (redirects to /warehouse if not)
-  await requireAdmin()
+  const profile = await requireAdmin()
 
   // Create a Supabase client for server-side data fetching
   const supabase = await createClient()
@@ -102,6 +102,7 @@ export default async function DashboardPage() {
         inventory={inventory as unknown as Parameters<typeof DashboardTabs>[0]['inventory']}
         allItems={allItems as unknown as Parameters<typeof DashboardTabs>[0]['allItems']}
         alertSettings={alertSettings as unknown as Parameters<typeof DashboardTabs>[0]['alertSettings']}
+        userRole={profile.role}
       />
 
     </div>

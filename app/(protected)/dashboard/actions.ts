@@ -9,6 +9,7 @@
 // -----------------------------------------------------------------------------
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/auth'
 
@@ -290,4 +291,96 @@ export async function getItemTransactions(itemId: string): Promise<{
     }>,
     error: null,
   }
+}
+
+
+// =============================================================================
+// LEVEL ZERO RESET ACTION
+// =============================================================================
+// One-time tool to clear all test data before the warehouse team starts.
+// Deletes all transactions (which zeros out all quantities via the view),
+// then inserts a single audit trail record. Items, KitTypes, and item Notes
+// are preserved. Uses the admin client for bulk operations that bypass RLS.
+
+export async function levelZeroReset(): Promise<{ error: string | null }> {
+  // Only admins can perform a system reset
+  const profile = await requireAdmin()
+  const adminSupabase = createAdminClient()
+
+  // Step 1: Delete ALL inventory transactions.
+  // This automatically sets every item's quantity_on_hand to 0 because
+  // the current_inventory view calculates stock by summing transactions.
+  const { error: deleteError } = await adminSupabase
+    .from('inventory_transactions')
+    .delete()
+    .gte('created_at', '1970-01-01') // match all rows (Supabase requires a filter for delete)
+
+  if (deleteError) return { error: `Failed to clear transactions: ${deleteError.message}` }
+
+  // Step 2: Find or create a SYSTEM item to anchor the audit trail transaction.
+  // Transactions require a valid item_id foreign key.
+  let systemItemId: string
+
+  const { data: existingItem } = await adminSupabase
+    .from('items')
+    .select('id')
+    .eq('sku', 'SYSTEM')
+    .single()
+
+  if (existingItem) {
+    systemItemId = existingItem.id
+  } else {
+    // Create a hidden SYSTEM item (inactive so it won't appear in normal lists)
+    const { data: newItem, error: itemError } = await adminSupabase
+      .from('items')
+      .insert({
+        sku: 'SYSTEM',
+        name: 'System Audit Item',
+        description: 'Internal item used for system-level audit trail records.',
+        unit_of_measure: 'each',
+        reorder_point: 0,
+        is_active: false,
+      })
+      .select('id')
+      .single()
+
+    if (itemError || !newItem) {
+      return { error: `Failed to create SYSTEM audit item: ${itemError?.message}` }
+    }
+    systemItemId = newItem.id
+  }
+
+  // Step 3: Insert a single audit trail transaction so we have a record of the reset.
+  const { error: insertError } = await adminSupabase
+    .from('inventory_transactions')
+    .insert({
+      item_id: systemItemId,
+      transaction_type: 'adjust',
+      quantity: 0,
+      notes: 'SYSTEM RESET: Inventory initialized to zero.',
+      created_by: profile.id,
+    })
+
+  if (insertError) return { error: `Failed to create audit record: ${insertError.message}` }
+
+  // Step 4: Clear all alert deduplication timestamps so alerts can re-fire cleanly.
+  // This ensures "Low Stock" alerts won't be suppressed by stale last_alert_sent values.
+  const { error: alertError } = await adminSupabase
+    .from('alert_settings')
+    .update({ last_alert_sent: null })
+    .gte('created_at', '1970-01-01') // match all rows
+
+  if (alertError) {
+    // Non-fatal — the reset itself succeeded, just log the warning
+    console.warn('Failed to clear alert timestamps:', alertError.message)
+  }
+
+  // Revalidate all pages so dashboard counters, inventory views, and
+  // transaction history all reflect the zeroed-out state immediately.
+  revalidatePath('/dashboard')
+  revalidatePath('/warehouse')
+  revalidatePath('/inventory')
+  revalidatePath('/transactions')
+
+  return { error: null }
 }

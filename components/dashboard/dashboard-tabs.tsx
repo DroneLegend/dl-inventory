@@ -17,12 +17,14 @@ import {
   Package,       // Item Manager
   LayoutList,    // Inventory Overview
   Bell,          // Alert Settings
+  Wrench,        // System Tools
 } from 'lucide-react'
 import KitCalculator from '@/components/dashboard/kit-calculator'
 import BomManager from '@/components/dashboard/bom-manager'
 import ItemManager from '@/components/dashboard/item-manager'
 import InventoryOverview from '@/components/dashboard/inventory-overview'
 import AlertSettingsPanel from '@/components/dashboard/alert-settings-panel'
+import LevelZeroReset from '@/components/dashboard/level-zero-reset'
 
 // ---- Type definitions --------------------------------------------------------
 // These match the data shapes fetched in the server page and passed in as props.
@@ -84,6 +86,7 @@ type Props = {
   inventory: InventoryItem[]
   allItems: Item[]
   alertSettings: AlertSetting[]
+  userRole: 'admin' | 'warehouse'  // used to gate admin-only features like System Tools
 }
 
 // ---- Tab definitions --------------------------------------------------------
@@ -126,6 +129,12 @@ const TABS: Tab[] = [
     icon: Bell,
     description: 'Configure low-stock alert thresholds per item',
   },
+  {
+    id: 'system',
+    label: 'System Tools',
+    icon: Wrench,
+    description: 'Dangerous system-level operations — admin only',
+  },
 ]
 
 // ---- Main component ----------------------------------------------------------
@@ -136,25 +145,29 @@ export default function DashboardTabs({
   inventory,
   allItems,
   alertSettings,
+  userRole,
 }: Props) {
   // Support deep-linking to a tab via ?tab=bom (or any tab id)
   const searchParams = useSearchParams()
   const tabParam = searchParams.get('tab')
   const kitIdParam = searchParams.get('kitId')
 
+  // Only show the System Tools tab to admin users
+  const visibleTabs = TABS.filter(t => t.id !== 'system' || userRole === 'admin')
+
   // Which tab is currently active (defaults to the Kit Calculator, or URL param)
   const [activeTabId, setActiveTabId] = useState<string>(
-    TABS.some(t => t.id === tabParam) ? tabParam! : 'calculator'
+    visibleTabs.some(t => t.id === tabParam) ? tabParam! : 'calculator'
   )
 
   // Update active tab if URL search param changes
   useEffect(() => {
-    if (tabParam && TABS.some(t => t.id === tabParam)) {
+    if (tabParam && visibleTabs.some(t => t.id === tabParam)) {
       setActiveTabId(tabParam)
     }
-  }, [tabParam])
+  }, [tabParam, visibleTabs])
 
-  const activeTab = TABS.find((t) => t.id === activeTabId) ?? TABS[0]
+  const activeTab = visibleTabs.find((t) => t.id === activeTabId) ?? visibleTabs[0]
 
   // Build a simpler inventory array for the Kit Calculator (just item_id + quantity)
   const inventoryForCalc = inventory.map((i) => ({
@@ -168,7 +181,7 @@ export default function DashboardTabs({
       {/* Tab navigation bar */}
       <div className="border-b border-slate-200">
         <nav className="flex gap-1 overflow-x-auto pb-px">
-          {TABS.map((tab) => {
+          {visibleTabs.map((tab) => {
             const isActive = tab.id === activeTabId
             return (
               <button
@@ -230,6 +243,11 @@ export default function DashboardTabs({
           items={allItems}
           alertSettings={alertSettings}
         />
+      )}
+
+      {/* System Tools tab — only rendered for admin users */}
+      {activeTabId === 'system' && userRole === 'admin' && (
+        <LevelZeroReset />
       )}
 
     </div>
