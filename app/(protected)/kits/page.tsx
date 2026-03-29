@@ -21,10 +21,11 @@ export default async function KitsPage() {
   // Create a Supabase client for server-side data fetching
   const supabase = await createClient()
 
-  // Fetch all kit types
+  // Fetch all kit types, ordered by sort_order (for drag-and-drop positioning) then name
   const { data: kitTypes } = await supabase
     .from('kit_types')
-    .select('id, name, description, is_active')
+    .select('id, name, description, is_active, sort_order')
+    .order('sort_order')
     .order('name')
 
   // Fetch a count of BOM items per kit type.

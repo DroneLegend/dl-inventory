@@ -112,6 +112,29 @@ export async function deleteKitType(
 }
 
 
+// Update the sort_order for multiple kit types at once (used for drag-and-drop reordering)
+export async function reorderKitTypes(
+  orderedIds: string[]
+): Promise<{ error: string | null }> {
+  await requireAdmin()
+  const supabase = await createClient()
+
+  // Set each kit's sort_order to its index in the array
+  for (let i = 0; i < orderedIds.length; i++) {
+    const { error } = await supabase
+      .from('kit_types')
+      .update({ sort_order: i })
+      .eq('id', orderedIds[i])
+
+    if (error) return { error: error.message }
+  }
+
+  revalidatePath('/kits')
+  revalidatePath('/dashboard')
+  return { error: null }
+}
+
+
 // =============================================================================
 // USER MANAGEMENT ACTIONS
 // =============================================================================

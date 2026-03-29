@@ -32,6 +32,7 @@ type KitType = {
   name: string
   description: string | null
   is_active: boolean
+  sort_order: number
 }
 
 type BomItem = {

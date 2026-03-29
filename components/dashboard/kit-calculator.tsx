@@ -120,8 +120,8 @@ export default function KitCalculator({ kitTypes, bomItems, inventory }: Props) 
   // The kit type the user has selected in the dropdown
   const [selectedKitId, setSelectedKitId] = useState<string>(kitTypes[0]?.id ?? '')
 
-  // How many kits the user wants to build (defaults to 20)
-  const [kitsNeeded, setKitsNeeded] = useState<number>(20)
+  // How many kits the user wants to build (defaults to 0)
+  const [kitsNeeded, setKitsNeeded] = useState<number>(0)
 
   // Build a map of item_id → quantity_on_hand for quick lookups
   const inventoryMap = new Map<string, number>(
@@ -279,9 +279,9 @@ export default function KitCalculator({ kitTypes, bomItems, inventory }: Props) 
           <label className="text-sm font-medium text-slate-700">Kits Needed</label>
           <Input
             type="number"
-            min={1}
+            min={0}
             value={kitsNeeded}
-            onChange={(e) => setKitsNeeded(Math.max(1, parseInt(e.target.value) || 1))}
+            onChange={(e) => setKitsNeeded(Math.max(0, parseInt(e.target.value) || 0))}
             className="w-24"
           />
         </div>

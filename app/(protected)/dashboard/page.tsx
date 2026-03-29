@@ -40,9 +40,11 @@ export default async function DashboardPage() {
   ] = await Promise.all([
 
     // 1. All kit types (active and inactive — BOM Manager needs inactive ones too)
+    //    Ordered by sort_order first (for drag-and-drop positioning), then name as tiebreaker
     supabase
       .from('kit_types')
-      .select('id, name, description, is_active')
+      .select('id, name, description, is_active, sort_order')
+      .order('sort_order')
       .order('name'),
 
     // 2. All BOM items, joined with their item details

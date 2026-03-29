@@ -11,12 +11,12 @@
 //   - Deactivate or reactivate kit types
 // -----------------------------------------------------------------------------
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Copy, Pencil, Plus, Trash2, X, Check } from 'lucide-react'
-import { addKitType, updateKitType, toggleKitTypeActive, deleteKitType } from '@/app/(protected)/admin/actions'
+import { Copy, GripVertical, Pencil, Plus, Trash2, X, Check } from 'lucide-react'
+import { addKitType, updateKitType, toggleKitTypeActive, deleteKitType, reorderKitTypes } from '@/app/(protected)/admin/actions'
 import { cn } from '@/lib/utils'
 
 // ---- Type definitions --------------------------------------------------------
@@ -26,6 +26,7 @@ type KitType = {
   name: string
   description: string | null
   is_active: boolean
+  sort_order: number
   // Number of BOM items associated with this kit type
   bom_item_count: number
 }
@@ -52,6 +53,57 @@ export default function KitManager({ kitTypes }: Props) {
 
   // isPending = true while a server action is in progress
   const [isPending, startTransition] = useTransition()
+
+  // ---- Drag-and-drop state for reordering kit types -------------------------
+
+  // Which kit id is currently being dragged
+  const dragItemId = useRef<string | null>(null)
+
+  // Which kit id is currently being hovered over during a drag
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+
+  // Called when the user starts dragging a kit type row
+  function handleDragStart(kitId: string) {
+    dragItemId.current = kitId
+  }
+
+  // Called when dragging over another row — we track this to show a visual indicator
+  function handleDragOver(e: React.DragEvent, kitId: string) {
+    e.preventDefault() // required to allow dropping
+    setDragOverId(kitId)
+  }
+
+  // Called when the user drops a kit type onto another row — saves the new order
+  function handleDrop(targetKitId: string) {
+    const sourceId = dragItemId.current
+    if (!sourceId || sourceId === targetKitId) {
+      // Dropped on itself — nothing to do
+      dragItemId.current = null
+      setDragOverId(null)
+      return
+    }
+
+    // Reorder: move the dragged kit to where the target kit is
+    const currentOrder = sorted.map((k) => k.id)
+    const fromIndex = currentOrder.indexOf(sourceId)
+    const toIndex = currentOrder.indexOf(targetKitId)
+    currentOrder.splice(fromIndex, 1)
+    currentOrder.splice(toIndex, 0, sourceId)
+
+    // Save the new order to the database
+    startTransition(async () => {
+      const result = await reorderKitTypes(currentOrder)
+      if (result.error) setError(result.error)
+    })
+
+    dragItemId.current = null
+    setDragOverId(null)
+  }
+
+  function handleDragEnd() {
+    dragItemId.current = null
+    setDragOverId(null)
+  }
 
 
   // ---- Form helpers -----------------------------------------------------------
@@ -161,9 +213,11 @@ export default function KitManager({ kitTypes }: Props) {
 
   // ---- Render ----------------------------------------------------------------
 
-  // Sort kit types: active first, then inactive; alphabetically within each group
+  // Sort kit types: active first, then inactive; by sort_order within each group,
+  // with name as a tiebreaker for kits that share the same sort_order
   const sorted = [...kitTypes].sort((a, b) => {
     if (a.is_active !== b.is_active) return a.is_active ? -1 : 1
+    if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order
     return a.name.localeCompare(b.name)
   })
 
@@ -257,6 +311,7 @@ export default function KitManager({ kitTypes }: Props) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
+                <th className="w-10 px-2 py-3"></th>
                 <th className="px-4 py-3 text-left font-semibold text-slate-500 text-xs uppercase tracking-wide">Kit Name</th>
                 <th className="px-4 py-3 text-left font-semibold text-slate-500 text-xs uppercase tracking-wide">Description</th>
                 <th className="px-4 py-3 text-center font-semibold text-slate-500 text-xs uppercase tracking-wide">Items in BOM</th>
@@ -273,7 +328,7 @@ export default function KitManager({ kitTypes }: Props) {
                   return (
                     <tr key={kit.id} className="bg-amber-50">
                       {/* Inline edit form spanning all columns */}
-                      <td colSpan={5} className="px-4 py-3">
+                      <td colSpan={6} className="px-4 py-3">
                         <div className="flex flex-wrap items-end gap-3">
                           {/* Name input */}
                           <div className="flex flex-col gap-1">
@@ -327,11 +382,22 @@ export default function KitManager({ kitTypes }: Props) {
                 return (
                   <tr
                     key={kit.id}
+                    draggable
+                    onDragStart={() => handleDragStart(kit.id)}
+                    onDragOver={(e) => handleDragOver(e, kit.id)}
+                    onDrop={() => handleDrop(kit.id)}
+                    onDragEnd={handleDragEnd}
                     className={cn(
                       'transition-colors',
-                      kit.is_active ? 'hover:bg-slate-50' : 'bg-slate-50/50 opacity-60'
+                      kit.is_active ? 'hover:bg-slate-50' : 'bg-slate-50/50 opacity-60',
+                      dragOverId === kit.id && 'border-t-2 border-brand-orange'
                     )}
                   >
+                    {/* Drag handle — grab this to reorder kit types */}
+                    <td className="w-10 px-2 py-3 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500">
+                      <GripVertical className="h-4 w-4 mx-auto" />
+                    </td>
+
                     {/* Kit name */}
                     <td className="px-4 py-3 font-medium text-slate-800">{kit.name}</td>
 
