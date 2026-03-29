@@ -102,6 +102,150 @@ function buildDescription(source: string, unitCost: string, notes: string): stri
   return parts.join(' | ')
 }
 
+// ---- Item form (extracted to top level to prevent focus loss on re-render) ----
+// When defined inside ItemManager, React creates a new component function on each
+// render, causing it to unmount/remount and lose input focus after every keystroke.
+
+function ItemForm({
+  isAdding,
+  form,
+  error,
+  isPending,
+  setField,
+  handleAdd,
+  handleUpdate,
+  cancelForm,
+}: {
+  isAdding: boolean
+  form: ItemFormData
+  error: string | null
+  isPending: boolean
+  setField: (field: keyof ItemFormData, value: string) => void
+  handleAdd: () => void
+  handleUpdate: () => void
+  cancelForm: () => void
+}) {
+  return (
+    <div className="border border-brand-orange/30 bg-amber-50 rounded-xl p-5 space-y-4">
+      <h4 className="font-semibold text-slate-700 text-sm">
+        {isAdding ? 'Add New Item' : 'Edit Item'}
+      </h4>
+
+      <div className="grid grid-cols-4 gap-4">
+
+        {/* Row 1: SKU (half) | Unit of Measure (half) */}
+        <div className="col-span-2 space-y-1.5">
+          <Label htmlFor="item-sku">SKU <span className="text-red-500">*</span></Label>
+          <Input
+            id="item-sku"
+            value={form.sku}
+            onChange={(e) => setField('sku', e.target.value)}
+            placeholder="e.g. STM-205"
+          />
+        </div>
+
+        <div className="col-span-2 space-y-1.5">
+          <Label htmlFor="item-uom">Unit of Measure <span className="text-red-500">*</span></Label>
+          <Input
+            id="item-uom"
+            value={form.unit_of_measure}
+            onChange={(e) => setField('unit_of_measure', e.target.value)}
+            placeholder="e.g. each, 12-pack, set of 6"
+          />
+        </div>
+
+        {/* Row 2: Name (full width) */}
+        <div className="col-span-4 space-y-1.5">
+          <Label htmlFor="item-name">Name <span className="text-red-500">*</span></Label>
+          <Input
+            id="item-name"
+            value={form.name}
+            onChange={(e) => setField('name', e.target.value)}
+            placeholder="e.g. 5x Replacement Propellers"
+          />
+        </div>
+
+        {/* Row 3: Source (half) | Unit Cost (half) */}
+        <div className="col-span-2 space-y-1.5">
+          <Label htmlFor="item-source">Source</Label>
+          <Input
+            id="item-source"
+            value={form.source}
+            onChange={(e) => setField('source', e.target.value)}
+            placeholder="e.g. Amazon"
+          />
+        </div>
+
+        <div className="col-span-2 space-y-1.5">
+          {/* Unit cost — prefixed with a "$" sign outside the input */}
+          <Label htmlFor="item-cost">Unit Cost</Label>
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-500 font-medium">$</span>
+            <Input
+              id="item-cost"
+              value={form.unitCost}
+              onChange={(e) => setField('unitCost', e.target.value)}
+              placeholder="e.g. 25.00"
+              className="flex-1"
+            />
+          </div>
+        </div>
+
+        {/* Row 4: Reorder Point (quarter width) */}
+        <div className="col-span-1 space-y-1.5">
+          <Label htmlFor="item-reorder">
+            Reorder Point
+            <span className="text-slate-400 font-normal ml-1 text-xs">(alert)</span>
+          </Label>
+          <Input
+            id="item-reorder"
+            type="number"
+            min={0}
+            value={form.reorder_point}
+            onChange={(e) => setField('reorder_point', e.target.value)}
+          />
+        </div>
+
+        {/* Row 5: Notes / extra description (full width) */}
+        <div className="col-span-4 space-y-1.5">
+          <Label htmlFor="item-notes">
+            Notes
+            <span className="text-slate-400 font-normal ml-1 text-xs">(optional — anything extra)</span>
+          </Label>
+          <Input
+            id="item-notes"
+            value={form.notes}
+            onChange={(e) => setField('notes', e.target.value)}
+            placeholder="Any additional details"
+          />
+        </div>
+
+      </div>
+
+      {/* Validation / server error */}
+      {error && (
+        <p className="text-sm text-red-600">{error}</p>
+      )}
+
+      {/* Form action buttons */}
+      <div className="flex gap-2">
+        <Button
+          onClick={isAdding ? handleAdd : handleUpdate}
+          disabled={isPending}
+          className="bg-brand-navy text-white hover:bg-brand-navy/90"
+        >
+          <Check className="h-4 w-4 mr-1" />
+          {isAdding ? 'Add Item' : 'Save Changes'}
+        </Button>
+        <Button variant="ghost" onClick={cancelForm} disabled={isPending}>
+          <X className="h-4 w-4 mr-1" />
+          Cancel
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 // ---- Main component ----------------------------------------------------------
 
 export default function ItemManager({ items }: Props) {
@@ -242,128 +386,6 @@ export default function ItemManager({ items }: Props) {
     })
   }
 
-  // ---- Item form (shared between add and edit) ---------------------------------
-
-  const ItemForm = () => (
-    <div className="border border-brand-orange/30 bg-amber-50 rounded-xl p-5 space-y-4">
-      <h4 className="font-semibold text-slate-700 text-sm">
-        {isAdding ? 'Add New Item' : 'Edit Item'}
-      </h4>
-
-      <div className="grid grid-cols-4 gap-4">
-
-        {/* Row 1: SKU (half) | Unit of Measure (half) */}
-        <div className="col-span-2 space-y-1.5">
-          <Label htmlFor="item-sku">SKU <span className="text-red-500">*</span></Label>
-          <Input
-            id="item-sku"
-            value={form.sku}
-            onChange={(e) => setField('sku', e.target.value)}
-            placeholder="e.g. STM-205"
-          />
-        </div>
-
-        <div className="col-span-2 space-y-1.5">
-          <Label htmlFor="item-uom">Unit of Measure <span className="text-red-500">*</span></Label>
-          <Input
-            id="item-uom"
-            value={form.unit_of_measure}
-            onChange={(e) => setField('unit_of_measure', e.target.value)}
-            placeholder="e.g. each, 12-pack, set of 6"
-          />
-        </div>
-
-        {/* Row 2: Name (full width) */}
-        <div className="col-span-4 space-y-1.5">
-          <Label htmlFor="item-name">Name <span className="text-red-500">*</span></Label>
-          <Input
-            id="item-name"
-            value={form.name}
-            onChange={(e) => setField('name', e.target.value)}
-            placeholder="e.g. 5x Replacement Propellers"
-          />
-        </div>
-
-        {/* Row 3: Source (half) | Unit Cost (half) */}
-        <div className="col-span-2 space-y-1.5">
-          <Label htmlFor="item-source">Source</Label>
-          <Input
-            id="item-source"
-            value={form.source}
-            onChange={(e) => setField('source', e.target.value)}
-            placeholder="e.g. Amazon"
-          />
-        </div>
-
-        <div className="col-span-2 space-y-1.5">
-          {/* Unit cost — prefixed with a "$" sign outside the input */}
-          <Label htmlFor="item-cost">Unit Cost</Label>
-          <div className="flex items-center gap-1.5">
-            <span className="text-slate-500 font-medium">$</span>
-            <Input
-              id="item-cost"
-              value={form.unitCost}
-              onChange={(e) => setField('unitCost', e.target.value)}
-              placeholder="e.g. 25.00"
-              className="flex-1"
-            />
-          </div>
-        </div>
-
-        {/* Row 4: Reorder Point (quarter width) */}
-        <div className="col-span-1 space-y-1.5">
-          <Label htmlFor="item-reorder">
-            Reorder Point
-            <span className="text-slate-400 font-normal ml-1 text-xs">(alert)</span>
-          </Label>
-          <Input
-            id="item-reorder"
-            type="number"
-            min={0}
-            value={form.reorder_point}
-            onChange={(e) => setField('reorder_point', e.target.value)}
-          />
-        </div>
-
-        {/* Row 5: Notes / extra description (full width) */}
-        <div className="col-span-4 space-y-1.5">
-          <Label htmlFor="item-notes">
-            Notes
-            <span className="text-slate-400 font-normal ml-1 text-xs">(optional — anything extra)</span>
-          </Label>
-          <Input
-            id="item-notes"
-            value={form.notes}
-            onChange={(e) => setField('notes', e.target.value)}
-            placeholder="Any additional details"
-          />
-        </div>
-
-      </div>
-
-      {/* Validation / server error */}
-      {error && (
-        <p className="text-sm text-red-600">{error}</p>
-      )}
-
-      {/* Form action buttons */}
-      <div className="flex gap-2">
-        <Button
-          onClick={isAdding ? handleAdd : handleUpdate}
-          disabled={isPending}
-          className="bg-brand-navy text-white hover:bg-brand-navy/90"
-        >
-          <Check className="h-4 w-4 mr-1" />
-          {isAdding ? 'Add Item' : 'Save Changes'}
-        </Button>
-        <Button variant="ghost" onClick={cancelForm} disabled={isPending}>
-          <X className="h-4 w-4 mr-1" />
-          Cancel
-        </Button>
-      </div>
-    </div>
-  )
-
   // ---- Render ----------------------------------------------------------------
 
   return (
@@ -399,8 +421,19 @@ export default function ItemManager({ items }: Props) {
         </button>
       </div>
 
-      {/* Inline add/edit form */}
-      {(isAdding || editingItemId) && <ItemForm />}
+      {/* Inline add/edit form — ItemForm is a top-level component to preserve focus */}
+      {(isAdding || editingItemId) && (
+        <ItemForm
+          isAdding={isAdding}
+          form={form}
+          error={error}
+          isPending={isPending}
+          setField={setField}
+          handleAdd={handleAdd}
+          handleUpdate={handleUpdate}
+          cancelForm={cancelForm}
+        />
+      )}
 
       {/* Items table */}
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
